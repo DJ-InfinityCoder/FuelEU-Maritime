@@ -1,20 +1,22 @@
 {
     "compilerOptions": {
-        "target": "es2020",
-        "module": "esnext",
-        "moduleResolution": "node",
-        "strict": true,
-        "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true,
-        "baseUrl": ".",
-        "ignoreDeprecations": "6.0",
-        "paths": {
-            "*": ["src/*"]
-        }
+      "target": "es2020",
+      "module": "esnext",
+      "moduleResolution": "node",
+      "strict": true,
+      "esModuleInterop": true,
+      "forceConsistentCasingInFileNames": true,
+      "baseUrl": ".",
+      "outDir": "./dist",        
+      "paths": {
+        "*": ["src/*"]
+      },
+      "types": ["node", "@vercel/node"]  
     },
-    "include": ["src/**/*.ts"],
+    "include": ["src/**/*.ts", "api/**/*.ts"],
     "ts-node": {
-        "esm": true,
-        "experimentalSpecifierResolution": "node"
+      "esm": true,
+      "experimentalSpecifierResolution": "node"
     }
-}
+  }
+  
