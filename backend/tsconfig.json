@@ -11,7 +11,7 @@
       "paths": {
         "*": ["src/*"]
       },
-      "types": ["node", "@vercel/node"]  
+      "types": ["node"]  
     },
     "include": ["src/**/*.ts", "api/**/*.ts"],
     "ts-node": {
