@@ -1,90 +1,94 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCompliance } from '../../hooks/useCompliance';
 import { useBanking } from '../../hooks/useBanking';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import type { ComplianceBalance } from '@/core/domain/entities/ShipCompliance';
-import type { BankEntry } from '@/core/domain/entities/BankEntry';
+import type { BankEntry, BankingStatus } from '@/core/domain/entities/BankEntry';
 
 export const BankingTab: React.FC = () => {
   const { fetchComplianceBalance } = useCompliance();
-  const { bankSurplus, applyBanked, fetchBankingRecords, loading } = useBanking();
+  const { 
+    bankSurplus, 
+    applyBanked, 
+    fetchShipBankingHistory,
+    fetchBankingStatus,
+    loading 
+  } = useBanking();
   
   const [shipId, setShipId] = useState('');
   const [year, setYear] = useState('2024');
   const [bankAmount, setBankAmount] = useState('');
   const [applyAmount, setApplyAmount] = useState('');
   const [cbData, setCbData] = useState<ComplianceBalance | null>(null);
-  const [bankingRecords, setBankingRecords] = useState<BankEntry[]>([]);
+  const [bankingHistory, setBankingHistory] = useState<BankEntry[]>([]);
+  const [bankingStatus, setBankingStatus] = useState<BankingStatus | null>(null);
   const [resultMessage, setResultMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Auto-fetch CB and status when ship/year changes
+  useEffect(() => {
+    if (shipId && year) {
+      handleFetchAll();
+    } else {
+      // Clear data when ship/year is empty
+      setCbData(null);
+      setBankingStatus(null);
+      setBankingHistory([]);
+      setResultMessage(null);
+    }
+  }, [shipId, year]);
+
+  const handleFetchAll = async () => {
+    if (!shipId || !year) return;
+
+    try {
+      setResultMessage(null);
+      
+      // Fetch CB and banking data in parallel
+      const [cbResult, statusData, historyData] = await Promise.all([
+        fetchComplianceBalance(shipId, parseInt(year)).catch(() => null),
+        fetchBankingStatus(shipId, parseInt(year)).catch(() => null),
+        fetchShipBankingHistory(shipId).catch(() => []),
+      ]);
+      
+      // Update CB data if available
+      if (cbResult && cbResult.cbBefore !== undefined) {
+        setCbData(cbResult);
+      } else {
+        setCbData(null);
+      }
+      
+      // Update banking status and history
+      setBankingStatus(statusData);
+      setBankingHistory(historyData);
+      
+    } catch (err) {
+      console.error('Failed to fetch data:', err);
+    }
+  };
 
   const handleFetchCB = async () => {
     if (!shipId || !year) {
       setResultMessage({ 
         type: 'error', 
-        text: '❌ Please enter both Ship ID and Year to fetch compliance balance' 
+        text: '❌ Please enter both Ship ID and Year' 
       });
       return;
     }
 
-    try {
-      setResultMessage(null);
-      const data = await fetchComplianceBalance(shipId, parseInt(year));
-      
-      if (!data || data.cbBefore === undefined) {
-        setResultMessage({ 
-          type: 'error', 
-          text: `❌ No Compliance Data Found\n` +
-                `Ship: ${shipId} | Year: ${year}\n` +
-                `The ship may not exist or CB hasn't been computed yet.\n` +
-                `💡 Available Ships: R001, R002, R003 (2024) | R004, R005 (2025)\n` +
-                `Tip: Go to Compare Tab and click "Compute CB" button first.`
-        });
-        return;
-      }
-      
-      setCbData(data);
-      
-      // Show success message with CB details
-      setResultMessage({ 
-        type: 'success', 
-        text: `✅ Compliance Balance Retrieved\n` +
-              `Ship: ${shipId} | Year: ${year}\n` +
-              `CB: ${data.cbBefore.toLocaleString()} gCO₂eq | ` +
-              `Status: ${data.cbBefore > 0 ? 'Surplus' : data.cbBefore < 0 ? 'Deficit' : 'Neutral'}`
-      });
-      
-      // Also fetch banking records
-      const records = await fetchBankingRecords(shipId, parseInt(year));
-      setBankingRecords(records);
-    } catch (err) {
-      const errorMsg = err instanceof Error 
-        ? `❌ Failed to fetch CB: ${err.message}` 
-        : '❌ Failed to fetch compliance balance. Please try again.';
-      
-      setResultMessage({ 
-        type: 'error', 
-        text: errorMsg
-      });
-    }
+    await handleFetchAll();
   };
 
   const handleBankSurplus = async () => {
     if (!shipId || !year || !bankAmount) {
-      setResultMessage({ 
-        type: 'error', 
-        text: '❌ Please fill in Ship ID, Year, and Amount to bank surplus' 
-      });
+      setResultMessage({ type: 'error', text: '❌ Fill all fields' });
       return;
     }
 
     const amountValue = parseFloat(bankAmount);
     if (isNaN(amountValue) || amountValue <= 0) {
-      setResultMessage({ 
-        type: 'error', 
-        text: '❌ Amount must be a positive number greater than 0' 
-      });
+      setResultMessage({ type: 'error', text: '❌ Amount must be positive' });
       return;
     }
 
@@ -96,48 +100,30 @@ export const BankingTab: React.FC = () => {
         amount: amountValue,
       });
       
-      const successMsg = `✅ Banking Successful!\n` +
-        `Ship: ${shipId} | Year: ${year}\n` +
-        `Amount Banked: ${amountValue.toLocaleString()} gCO₂eq\n` +
-        `CB Before: ${result.cbBefore?.toLocaleString() || 'N/A'} gCO₂eq → ` +
-        `CB After: ${result.cbAfter?.toLocaleString() || 'N/A'} gCO₂eq\n` +
-        `${result.message || 'Surplus saved for future use'}`;
-      
       setResultMessage({ 
         type: 'success', 
-        text: successMsg
+        text: `✅ ${result.message}\nCB: ${result.cbBefore?.toLocaleString()} → ${result.cbAfter?.toLocaleString()} gCO₂eq`
       });
       
-      // Refresh CB
-      await handleFetchCB();
+      await handleFetchAll();
       setBankAmount('');
     } catch (err) {
-      const errorMsg = err instanceof Error 
-        ? `❌ Banking Failed: ${err.message}` 
-        : '❌ Failed to bank surplus. Please try again.';
-      
       setResultMessage({ 
         type: 'error', 
-        text: errorMsg
+        text: `❌ ${err instanceof Error ? err.message : 'Banking failed'}`
       });
     }
   };
 
   const handleApplyBanked = async () => {
     if (!shipId || !year || !applyAmount) {
-      setResultMessage({ 
-        type: 'error', 
-        text: '❌ Please fill in Ship ID, Year, and Amount to apply banked surplus' 
-      });
+      setResultMessage({ type: 'error', text: '❌ Fill all fields' });
       return;
     }
 
     const amountValue = parseFloat(applyAmount);
     if (isNaN(amountValue) || amountValue <= 0) {
-      setResultMessage({ 
-        type: 'error', 
-        text: '❌ Amount must be a positive number greater than 0' 
-      });
+      setResultMessage({ type: 'error', text: '❌ Amount must be positive' });
       return;
     }
 
@@ -149,29 +135,17 @@ export const BankingTab: React.FC = () => {
         amount: amountValue,
       });
       
-      const successMsg = `✅ Application Successful!\n` +
-        `Ship: ${shipId} | Year: ${year}\n` +
-        `Amount Applied: ${amountValue.toLocaleString()} gCO₂eq\n` +
-        `CB Before: ${result.cbBefore?.toLocaleString() || 'N/A'} gCO₂eq → ` +
-        `CB After: ${result.cbAfter?.toLocaleString() || 'N/A'} gCO₂eq\n` +
-        `${result.message || 'Banked surplus used to offset deficit'}`;
-      
       setResultMessage({ 
         type: 'success', 
-        text: successMsg
+        text: `✅ ${result.message}\nCB: ${result.cbBefore?.toLocaleString()} → ${result.cbAfter?.toLocaleString()} gCO₂eq`
       });
       
-      // Refresh CB
-      await handleFetchCB();
+      await handleFetchAll();
       setApplyAmount('');
     } catch (err) {
-      const errorMsg = err instanceof Error 
-        ? `❌ Application Failed: ${err.message}` 
-        : '❌ Failed to apply banked surplus. Please try again.';
-      
       setResultMessage({ 
         type: 'error', 
-        text: errorMsg
+        text: `❌ ${err instanceof Error ? err.message : 'Application failed'}`
       });
     }
   };
@@ -184,159 +158,194 @@ export const BankingTab: React.FC = () => {
       <Card title="Banking - Article 20">
         <div className="prose max-w-none mb-6">
           <p className="text-sm text-gray-600">
-            Banking allows ships with positive Compliance Balance (surplus) to save it for future years 
-            or apply it to offset deficits. This implements FuelEU Maritime Regulation Article 20.
+            Banking allows ships to save surplus CB for future years or apply banked CB to offset deficits.
+            Banked CB can only be used by the same ship (same ID) across different years.
           </p>
-          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-800 font-medium mb-1">💡 Available Ship IDs:</p>
-            <p className="text-xs text-blue-700">
-              R001, R002, R003 (year 2024) | R004, R005 (year 2025)
-            </p>
-            <p className="text-xs text-blue-600 mt-2">
-              Note: If CB shows as 0, it means CB hasn't been computed yet or the ship is perfectly compliant.
-            </p>
-          </div>
         </div>
 
         {/* Input Section */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Ship ID
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Ship ID</label>
             <input
               type="text"
               value={shipId}
               onChange={(e) => setShipId(e.target.value)}
-              placeholder="e.g., SHIP001"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="e.g., R001"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Year
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Year</label>
             <input
               type="number"
               value={year}
               onChange={(e) => setYear(e.target.value)}
               placeholder="2024"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
-
           <div className="flex items-end">
             <Button onClick={handleFetchCB} loading={loading} className="w-full">
-              Fetch Compliance Balance
+              Fetch CB & Status
             </Button>
           </div>
         </div>
 
         {/* Result Message */}
         {resultMessage && (
-          <div
-            className={`p-4 rounded-lg mb-6 ${
-              resultMessage.type === 'success'
-                ? 'bg-green-50 border border-green-200 text-green-800'
-                : 'bg-red-50 border border-red-200 text-red-800'
-            }`}
-          >
+          <div className={`p-4 rounded-lg mb-6 ${
+            resultMessage.type === 'success' 
+              ? 'bg-green-50 border border-green-200 text-green-800'
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}>
             <p className="text-sm font-medium whitespace-pre-line">{resultMessage.text}</p>
           </div>
         )}
 
-        {/* CB Display */}
-        {cbData && (
-          <div className="mb-6">
-            <Card>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-sm text-gray-600 mb-2">CB Before</div>
-                  <div className={`text-2xl font-bold ${cbData.cbBefore >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {cbData.cbBefore?.toLocaleString() || 0}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">gCO₂eq</div>
+        {/* Banking Status Card */}
+        {bankingStatus?.exists && (
+          <Card title={`Banking Status: ${shipId} (${year})`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-sm text-gray-600 mb-2">Current CB</div>
+                <div className={`text-2xl font-bold ${
+                  (bankingStatus.currentCB ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {(bankingStatus.currentCB ?? 0).toLocaleString()}
                 </div>
-
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-sm text-gray-600 mb-2">Applied</div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {cbData.applied?.toLocaleString() || 0}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">gCO₂eq</div>
-                </div>
-
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-sm text-gray-600 mb-2">CB After</div>
-                  <div className={`text-2xl font-bold ${cbData.cbAfter >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {cbData.cbAfter?.toLocaleString() || 0}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">gCO₂eq</div>
-                </div>
+                <div className="text-xs text-gray-500 mt-1">gCO₂eq</div>
+                <Badge 
+                  variant={bankingStatus.status === 'SURPLUS' ? 'success' : bankingStatus.status === 'DEFICIT' ? 'danger' : 'default'}
+                  className="mt-2"
+                >
+                  {bankingStatus.status}
+                </Badge>
               </div>
 
-              <div className="mt-4 flex justify-center">
-                {hasSurplus ? (
-                  <Badge variant="success">Surplus Available</Badge>
-                ) : hasDeficit ? (
-                  <Badge variant="danger">Deficit</Badge>
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <div className="text-sm text-blue-600 mb-2">Total Banked</div>
+                <div className="text-2xl font-bold text-blue-700">
+                  {bankingStatus.banking?.totalBanked.toLocaleString() || 0}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">gCO₂eq (Ship-wide)</div>
+                <div className="text-xs text-blue-600 mt-1">All Years</div>
+              </div>
+
+              <div className="text-center p-4 bg-purple-50 rounded-lg">
+                <div className="text-sm text-purple-600 mb-2">Total Applied</div>
+                <div className="text-2xl font-bold text-purple-700">
+                  {bankingStatus.banking?.totalApplied.toLocaleString() || 0}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">gCO₂eq (Ship-wide)</div>
+                <div className="text-xs text-purple-600 mt-1">All Years</div>
+              </div>
+
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-sm text-green-600 mb-2">Available to Use</div>
+                <div className="text-2xl font-bold text-green-700">
+                  {bankingStatus.banking?.availableBanked.toLocaleString() || 0}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">gCO₂eq</div>
+                <div className="text-xs text-green-600 mt-1">For Ship {shipId}</div>
+              </div>
+            </div>
+
+            {/* Year-specific Banking Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* This Year's Activity */}
+              {bankingStatus.thisYear && bankingStatus.thisYear.transactions > 0 ? (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="text-sm font-medium text-amber-800 mb-2 flex items-center justify-between">
+                    <span>Year {year} Activity</span>
+                    <Badge variant="default">{bankingStatus.thisYear.transactions} transaction(s)</Badge>
+                  </div>
+                  {bankingStatus.thisYear.entries.map((entry, idx) => {
+                    const isBanking = entry.amountGco2eq > 0;
+                    return (
+                      <div key={idx} className="mt-2 p-3 bg-white rounded border border-amber-200">
+                        <div className="flex items-center justify-between">
+                          <Badge variant={isBanking ? 'success' : 'danger'}>
+                            {isBanking ? 'BANKED' : 'APPLIED'}
+                          </Badge>
+                          <span className={`font-bold ${isBanking ? 'text-green-600' : 'text-red-600'}`}>
+                            {isBanking ? '+' : ''}{entry.amountGco2eq.toLocaleString()} gCO₂eq
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600 mt-2">
+                          CB: {entry.cbBefore?.toLocaleString() || 'N/A'} → {entry.cbAfter?.toLocaleString() || 'N/A'}
+                        </div>
+                        {entry.createdAt && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {new Date(entry.createdAt).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="text-sm font-medium text-gray-600 mb-2">
+                    Year {year} Activity
+                  </div>
+                  <p className="text-xs text-gray-500">No banking transactions for this year</p>
+                </div>
+              )}
+
+              {/* Other Years Summary */}
+              <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <div className="text-sm font-medium text-indigo-800 mb-2 flex items-center justify-between">
+                  <span>Other Years Activity</span>
+                  <Badge variant="default">{bankingStatus.otherYears?.transactions || 0} transaction(s)</Badge>
+                </div>
+                {bankingStatus.otherYears && bankingStatus.otherYears.transactions > 0 ? (
+                  <div className="space-y-2">
+                    {/* Group by year and show summary */}
+                    {(() => {
+                      const yearGroups = bankingStatus.otherYears.entries.reduce((acc, entry) => {
+                        const yr = entry.year.toString();
+                        if (!acc[yr]) {
+                          acc[yr] = { banked: 0, applied: 0 };
+                        }
+                        if (entry.amountGco2eq > 0) {
+                          acc[yr].banked += entry.amountGco2eq;
+                        } else {
+                          acc[yr].applied += Math.abs(entry.amountGco2eq);
+                        }
+                        return acc;
+                      }, {} as Record<string, { banked: number; applied: number }>);
+
+                      return Object.entries(yearGroups).map(([yr, amounts]) => (
+                        <div key={yr} className="p-2 bg-white rounded border border-indigo-100">
+                          <div className="text-xs font-medium text-indigo-700 mb-1">Year {yr}</div>
+                          <div className="flex items-center justify-between text-xs">
+                            {amounts.banked > 0 && (
+                              <span className="text-green-600">
+                                Banked: +{amounts.banked.toLocaleString()}
+                              </span>
+                            )}
+                            {amounts.applied > 0 && (
+                              <span className="text-red-600">
+                                Applied: -{amounts.applied.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
                 ) : (
-                  <Badge variant="default">Neutral</Badge>
+                  <p className="text-xs text-indigo-600">No transactions in other years</p>
                 )}
               </div>
-            </Card>
-          </div>
-        )}
-
-        {/* Banking Records */}
-        {bankingRecords.length > 0 && (
-          <Card title="Banking History">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ship ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Year
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount (gCO₂eq)
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {bankingRecords.map((record) => (
-                    <tr key={record.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {record.id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {record.shipId}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {record.year}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {parseFloat(record.amountGco2eq.toString()).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </Card>
         )}
 
         {/* Banking Actions */}
         {cbData && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Bank Surplus */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <Card title="Bank Surplus">
               <p className="text-sm text-gray-600 mb-4">
                 Save positive CB for future use (requires CB &gt; 0)
@@ -351,7 +360,7 @@ export const BankingTab: React.FC = () => {
                   onChange={(e) => setBankAmount(e.target.value)}
                   placeholder="Enter amount"
                   disabled={!hasSurplus}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100"
                 />
               </div>
               <Button
@@ -363,21 +372,41 @@ export const BankingTab: React.FC = () => {
               >
                 Bank Surplus
               </Button>
-              {!hasSurplus && cbData && cbData.cbBefore !== undefined && cbData.cbBefore !== null && (
-                <p className="text-xs text-red-500 mt-2">
-                  {cbData.cbBefore === 0 
-                    ? '⚠️ CB is exactly 0 - ship is compliant, no banking needed'
-                    : `❌ Banking disabled: CB must be > 0 (current: ${cbData.cbBefore.toFixed(2)})`
-                  }
-                </p>
-              )}
             </Card>
 
-            {/* Apply Banked */}
             <Card title="Apply Banked Surplus">
               <p className="text-sm text-gray-600 mb-4">
-                Use previously banked surplus to offset deficit (requires CB ≤ 0)
+                Use banked surplus to offset deficit (requires CB &lt; 0)
               </p>
+              {bankingStatus?.banking && (
+                <div className={`mb-4 p-3 rounded-lg border ${
+                  bankingStatus.banking.availableBanked > 0 
+                    ? 'bg-blue-50 border-blue-200'
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  <p className={`text-xs ${
+                    bankingStatus.banking.availableBanked > 0 
+                      ? 'text-blue-700' 
+                      : 'text-red-700'
+                  }`}>
+                    {bankingStatus.banking.availableBanked > 0 ? (
+                      <>
+                        Available to apply: <span className="font-bold">
+                          {bankingStatus.banking.availableBanked.toLocaleString()} gCO₂eq
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-bold">⚠️ No banked surplus available</span>
+                        <br />
+                        <span className="text-xs">
+                          You need to bank surplus first from a year with positive CB (CB &gt; 0) before you can apply it to offset a deficit.
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Amount (gCO₂eq)
@@ -386,30 +415,96 @@ export const BankingTab: React.FC = () => {
                   type="number"
                   value={applyAmount}
                   onChange={(e) => setApplyAmount(e.target.value)}
-                  placeholder="Enter amount"
-                  disabled={!hasDeficit}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  placeholder={
+                    bankingStatus?.banking?.availableBanked 
+                      ? `Max: ${bankingStatus.banking.availableBanked}` 
+                      : 'No banked CB available'
+                  }
+                  disabled={!hasDeficit || (bankingStatus?.banking?.availableBanked ?? 0) <= 0}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100"
                 />
               </div>
               <Button
                 onClick={handleApplyBanked}
                 loading={loading}
-                disabled={!hasDeficit}
+                disabled={!hasDeficit || (bankingStatus?.banking?.availableBanked ?? 0) <= 0}
                 variant="primary"
                 className="w-full"
               >
                 Apply Banked
               </Button>
-              {!hasDeficit && cbData && cbData.cbBefore !== undefined && cbData.cbBefore !== null && (
-                <p className="text-xs text-red-500 mt-2">
+              {!hasDeficit && cbData && cbData.cbBefore !== undefined && (
+                <p className="text-xs text-amber-600 mt-3 p-2 bg-amber-50 rounded">
                   {cbData.cbBefore === 0 
-                    ? '⚠️ CB is exactly 0 - ship is compliant, no deficit to cover'
-                    : `❌ Apply disabled: CB must be < 0 (current: ${cbData.cbBefore.toFixed(2)})`
+                    ? '⚠️ CB is 0 - Ship is compliant, no deficit to cover'
+                    : cbData.cbBefore > 0
+                    ? `⚠️ CB is positive (${cbData.cbBefore.toFixed(2)} gCO₂eq) - Apply is only for deficits (CB < 0)`
+                    : ''
                   }
+                </p>
+              )}
+              {hasDeficit && (bankingStatus?.banking?.availableBanked ?? 0) <= 0 && (
+                <p className="text-xs text-red-600 mt-3 p-2 bg-red-50 rounded">
+                  ❌ Cannot apply: No banked surplus available for ship {shipId}.
+                  <br />
+                  💡 Bank surplus from a year with positive CB first.
                 </p>
               )}
             </Card>
           </div>
+        )}
+
+        {/* Complete Banking History */}
+        {bankingHistory.length > 0 && (
+          <Card title={`Complete Banking History: ${shipId} (All Years)`}>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Year</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">CB Before</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">CB After</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {bankingHistory.map((entry) => (
+                    <tr key={entry.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {entry.year}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <Badge variant={entry.transactionType === 'BANK' ? 'success' : 'default'}>
+                          {entry.transactionType || (entry.amountGco2eq > 0 ? 'BANK' : 'APPLY')}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                        {entry.cbBefore !== undefined 
+                          ? entry.cbBefore.toLocaleString() 
+                          : 'N/A'}
+                      </td>
+                      <td className={`px-4 py-3 whitespace-nowrap text-sm font-medium ${
+                        entry.amountGco2eq > 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {entry.amountGco2eq > 0 ? '+' : ''}
+                        {entry.amountGco2eq.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                        {entry.cbAfter !== undefined 
+                          ? entry.cbAfter.toLocaleString() 
+                          : 'N/A'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
       </Card>
     </div>

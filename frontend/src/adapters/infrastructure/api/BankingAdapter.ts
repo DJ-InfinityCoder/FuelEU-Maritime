@@ -4,6 +4,7 @@ import type {
   BankEntry,
   BankingOperation,
   BankingResult,
+  BankingStatus,
 } from '@/core/domain/entities/BankEntry';
 
 export class BankingAdapter implements IBankingPort {
@@ -12,6 +13,14 @@ export class BankingAdapter implements IBankingPort {
       shipId,
       year,
     });
+  }
+
+  async getShipBankingHistory(shipId: string): Promise<BankEntry[]> {
+    return apiClient.get<BankEntry[]>(`/banking/history/${shipId}`);
+  }
+
+  async getBankingStatus(shipId: string, year: number): Promise<BankingStatus> {
+    return apiClient.get<BankingStatus>(`/banking/status/${shipId}/${year}`);
   }
 
   async bankSurplus(operation: BankingOperation): Promise<BankingResult> {

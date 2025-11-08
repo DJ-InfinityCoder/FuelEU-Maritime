@@ -1,7 +1,7 @@
 // Port interfaces for outbound dependencies (Infrastructure layer)
 import type { Route, RouteComparison } from '../domain/entities/Route';
 import type { ShipCompliance, ComplianceBalance } from '../domain/entities/ShipCompliance';
-import type { BankEntry, BankingOperation, BankingResult } from '../domain/entities/BankEntry';
+import type { BankEntry, BankingOperation, BankingResult, BankingStatus } from '../domain/entities/BankEntry';
 import type { Pool, CreatePoolRequest, CreatePoolResponse } from '../domain/entities/Pool';
 
 export interface IRoutesPort {
@@ -17,6 +17,8 @@ export interface ICompliancePort {
 
 export interface IBankingPort {
   getBankingRecords(shipId: string, year: number): Promise<BankEntry[]>;
+  getShipBankingHistory(shipId: string): Promise<BankEntry[]>;
+  getBankingStatus(shipId: string, year: number): Promise<BankingStatus>;
   bankSurplus(operation: BankingOperation): Promise<BankingResult>;
   applyBanked(operation: BankingOperation): Promise<BankingResult>;
 }
