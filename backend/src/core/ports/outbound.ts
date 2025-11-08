@@ -31,6 +31,7 @@ export interface BankEntryRepository {
     addBankEntry(entry: BankEntry): Promise<void>;
     getAllBankEntries(): Promise<BankEntry[]>;
     getAvailableBanked(shipId: string): Promise<number>;
+    getShipBankingHistory(shipId: string): Promise<BankEntry[]>;
 }
 
 /**

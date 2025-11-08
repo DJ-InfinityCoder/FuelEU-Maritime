@@ -40,7 +40,7 @@ export const shipCompliance = pgTable("ship_compliance", {
     cb_gco2eq: decimal("cb_gco2eq", { precision: 15, scale: 2 }).notNull(),
 });
 
-// Bank entries table: stores banked surplus emission credits
+// Bank entries table: stores banked surplus emission credits with CB tracking
 export const bankEntries = pgTable("bank_entries", {
     id: serial("id").primaryKey(),
     ship_id: text("ship_id").notNull(),
@@ -49,6 +49,10 @@ export const bankEntries = pgTable("bank_entries", {
         precision: 15,
         scale: 2,
     }).notNull(),
+    cb_before: decimal("cb_before", { precision: 15, scale: 2 }),
+    cb_after: decimal("cb_after", { precision: 15, scale: 2 }),
+    transaction_type: text("transaction_type"),
+    created_at: timestamp("created_at").defaultNow(),
 });
 
 // Pools table: tracks pooling groups for ships

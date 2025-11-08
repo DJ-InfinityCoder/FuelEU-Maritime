@@ -60,6 +60,17 @@ async function seed() {
                 is_baseline: false,
             },
             {
+                route_id: 'R004',
+                vessel_type: 'RoRo',
+                fuel_type: 'HFO',
+                year: 2026,
+                ghg_intensity: '100',
+                fuel_consumption: '6000',
+                distance: '11800',
+                total_emissions: '5000',
+                is_baseline: false,
+            },
+            {
                 route_id: 'R005',
                 vessel_type: 'Container',
                 fuel_type: 'LNG',
@@ -73,7 +84,7 @@ async function seed() {
         ]).execute();
 
         console.log('✅ Seed data inserted successfully!');
-        console.log('   - 5 routes added');
+        console.log('   - 6 routes added');
         console.log('   - R001 set as baseline');
         
         // Display the seeded data

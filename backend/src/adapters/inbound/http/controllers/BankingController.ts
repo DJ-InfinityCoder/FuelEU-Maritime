@@ -100,4 +100,27 @@ export class BankingController {
             }
         }
     }
+
+    async getShipBankingHistory(req: Request, res: Response): Promise<void> {
+        try {
+            const { shipId } = req.params;
+            const history = await this.bankingService.getShipBankingHistory(shipId);
+            res.status(200).json(history);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Failed to get banking history" });
+        }
+    }
+
+    async getBankingStatus(req: Request, res: Response): Promise<void> {
+        try {
+            const { shipId, year } = req.params;
+            const yearNum = Number(year);
+            const status = await this.bankingService.getBankingStatus(shipId, yearNum);
+            res.status(200).json(status);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Failed to get banking status" });
+        }
+    }
 }

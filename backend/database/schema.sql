@@ -11,7 +11,7 @@ DROP TABLE IF EXISTS routes CASCADE;
 -- Routes table: stores shipping routes and their emission data
 CREATE TABLE routes (
     id SERIAL PRIMARY KEY,
-    route_id TEXT NOT NULL UNIQUE,
+    route_id TEXT NOT NULL,
     vessel_type TEXT NOT NULL,
     fuel_type TEXT NOT NULL,
     year INTEGER NOT NULL,
@@ -31,12 +31,15 @@ CREATE TABLE ship_compliance (
     UNIQUE(ship_id, year)
 );
 
--- Bank entries table: stores banked surplus emission credits
+-- Bank entries table: stores banked surplus emission credits with CB tracking
 CREATE TABLE bank_entries (
     id SERIAL PRIMARY KEY,
     ship_id TEXT NOT NULL,
     year INTEGER NOT NULL,
     amount_gco2eq DECIMAL(15, 2) NOT NULL,
+    cb_before DECIMAL(15, 2),
+    cb_after DECIMAL(15, 2),
+    transaction_type TEXT CHECK (transaction_type IN ('BANK', 'APPLY')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -63,6 +63,12 @@ router.get("/compliance/adjusted-cb", (req, res) =>
 router.get("/banking/records", (req, res) =>
     bankingController.getBankRecords(req, res)
 );
+router.get("/banking/history/:shipId", (req, res) =>
+    bankingController.getShipBankingHistory(req, res)
+);
+router.get("/banking/status/:shipId/:year", (req, res) =>
+    bankingController.getBankingStatus(req, res)
+);
 router.post("/banking/bank", (req, res) =>
     bankingController.bankSurplus(req, res)
 );
