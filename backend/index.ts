@@ -1,7 +1,11 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import app from './src/infrastructure/server/expressApp';
 
-// Export the Express app to be handled by Vercel's serverless environment
-export default (req: VercelRequest, res: VercelResponse) => {
-  app(req, res); // Delegate the request to the Express app
+export default async (req: VercelRequest, res: VercelResponse) => {
+  // Run the Express app handler here
+  return new Promise((resolve, reject) => {
+    app(req, res); // Call Express handler
+    res.on('finish', () => resolve()); // Ensure to resolve after response is finished
+    res.on('error', reject);  // Reject if there is an error
+  });
 };
