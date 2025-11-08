@@ -1,20 +1,35 @@
+// {
+//     "compilerOptions": {
+//         "target": "es2020",
+//         "module": "esnext",
+//         "moduleResolution": "node",
+//         "strict": true,
+//         "esModuleInterop": true,
+//         "forceConsistentCasingInFileNames": true,
+//         "baseUrl": ".",
+//         "ignoreDeprecations": "6.0",
+//         "paths": {
+//             "*": ["src/*"]
+//         }
+//     },
+//     "include": ["src/**/*.ts"],
+//     "ts-node": {
+//         "esm": true,
+//         "experimentalSpecifierResolution": "node"
+//     }
+// }
+
 {
     "compilerOptions": {
-        "target": "es2020",
-        "module": "esnext",
-        "moduleResolution": "node",
-        "strict": true,
-        "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true,
-        "baseUrl": ".",
-        "ignoreDeprecations": "6.0",
-        "paths": {
-            "*": ["src/*"]
-        }
+      "target": "ES2020",
+      "module": "CommonJS",
+      "outDir": "dist",
+      "rootDir": "src",
+      "strict": true,
+      "esModuleInterop": true,
+      "forceConsistentCasingInFileNames": true,
+      "skipLibCheck": true
     },
-    "include": ["src/**/*.ts"],
-    "ts-node": {
-        "esm": true,
-        "experimentalSpecifierResolution": "node"
-    }
-}
+    "include": ["src"]
+  }
+  
