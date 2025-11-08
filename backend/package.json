@@ -6,6 +6,7 @@
   "scripts": {
     "start": "tsx src/infrastructure/server/index.ts",
     "dev": "tsx watch src/infrastructure/server/index.ts",
+    "build": "tsc", 
     "seed": "tsx src/infrastructure/db/seed.ts",
     "applySchema": "tsx src/infrastructure/db/applySchema.ts",
     "test": "jest"
